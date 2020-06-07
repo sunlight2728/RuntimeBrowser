@@ -5,7 +5,7 @@ This is a class browser for the Objective-C runtime on iOS and OS X. It gives yo
 
 We have found this to be a useful development tool. Please note, however, that each user is responsible for their own usage.
 
-The [original version](http://www.prajnait.com/source/src_RuntimeBrowser.html) was released in April 2002 by Ezra Epstein. The project is maintained by Nicolas Seriot since August, 2008.
+The original version was released in April 2002 by [Ezra Epstein](https://github.com/eepstein). The project is maintained by Nicolas Seriot since August, 2008.
 
 ### iOS Version
 
@@ -22,7 +22,7 @@ You can browse the [iOS headers](https://github.com/nst/iOS-Runtime-Headers) as 
     
 ### OS X Version
 
-Latest build: 2015-06-03 [http://seriot.ch/temp/runtimebrowser_0.991.zip](http://seriot.ch/temp/runtimebrowser_0.991.zip) 275 KB
+Latest build: 2019-11-17 [http://seriot.ch/temp/RuntimeBrowser_0.996.zip](http://seriot.ch/temp/RuntimeBrowser_0.996.zip) 344 KB
 
   * browse by class tree, image, list or protocols
   * search in classes contents

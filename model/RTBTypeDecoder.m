@@ -67,15 +67,18 @@ static NSString *IVAR_TAB = @"    ";
 //static NSMutableDictionary *cachedDecodedTypesForEncodedTypes = nil;
 //static NSMutableDictionary *cachedDecodedTypesForEncodedTypesFlat = nil;
 
-#define isTypeSpecifier(fc) (fc=='r'||fc=='n'||fc=='N'||fc=='o'||fc=='O'||fc=='V'||fc=='!')
+#define isTypeSpecifier(fc) (fc=='r'||fc=='R'||fc=='n'||fc=='N'||fc=='o'||fc=='O'||fc=='V'||fc=='A'||fc=='j'||fc=='!')
 
 NSString * rtb_argTypeSpecifierForEncoding(char fc) {
     if(fc == 'r') return @"const ";
+    if(fc == 'R') return @"byref ";
     if(fc == 'n') return @"in ";
     if(fc == 'N') return @"inout ";
     if(fc == 'o') return @"out ";
     if(fc == 'O') return @"bycopy ";
     if(fc == 'V') return @"oneway ";
+    if(fc == 'A') return @"_Atomic ";
+    if(fc == 'j') return @"_Complex ";
     if(fc == '!') return @""; // garbage-collector marked invisible -> ignore
     return nil;
 }
@@ -133,6 +136,8 @@ NSString *rtb_functionSignatureNote(BOOL showFunctionSignatureNote) {
     NSMutableArray *ma = [NSMutableArray array];
     
     while(YES) {
+        @autoreleasepool {
+  
         NSDictionary *d = nil;
         
         [typeDecoder skipDigits];
@@ -148,6 +153,8 @@ NSString *rtb_functionSignatureNote(BOOL showFunctionSignatureNote) {
         }
 
         [ma addObject:d[TYPE_LABEL]];
+            
+        }
     }
     
 //    cacheDictionary[encodedTypes] = ma;
@@ -443,23 +450,31 @@ NSString *rtb_functionSignatureNote(BOOL showFunctionSignatureNote) {
     int i;
     
     //parse each char as an (unnamed) type ... we then need to assign names.
-    for (i=1; *ivT != endCh; ++i) {
-        //structInfo = cTypeDeclForEncType(depth, i, YES, inLine, inParam, YES);
-        structInfo = [self cTypeDeclForEncTypeDepth:depth sPart:i inStruct:YES inLine:inLine inParam:inParam spaceAfter:YES];
-        
-        // Naming for nested pieces is a bit of a kludge.
-        // To support arbitrary nesting w/ unique naming (not required to compile)
-        // we'd need an array of sPart[] and increment sPart[depth] and output
-        // all sParts in sequence to generate a unique name (based on location)
-        if (sPart > 1 || *depth > 1) { // PENDING -- make var (and arg, and category and ...) names a parameter
-            partName = [NSString stringWithFormat:@"x_%d_%d_%d", sPart, (*depth)-1, i];
-        } else {
-            partName = [NSString stringWithFormat:@"x%d", i]; // PENDING -- make var names a parameter
+    for (i=1; *ivT != endCh && *ivT != '\0'; ++i) {
+        @autoreleasepool {
+            
+            //structInfo = cTypeDeclForEncType(depth, i, YES, inLine, inParam, YES);
+            structInfo = [self cTypeDeclForEncTypeDepth:depth sPart:i inStruct:YES inLine:inLine inParam:inParam spaceAfter:YES];
+            
+            // Naming for nested pieces is a bit of a kludge.
+            // To support arbitrary nesting w/ unique naming (not required to compile)
+            // we'd need an array of sPart[] and increment sPart[depth] and output
+            // all sParts in sequence to generate a unique name (based on location)
+            
+            if ([structS length] > 1024) {
+                continue;
+            }
+            
+            if (sPart > 1 || *depth > 1) { // PENDING -- make var (and arg, and category and ...) names a parameter
+                partName = [NSString stringWithFormat:@"x_%d_%d_%d", sPart, (*depth)-1, i];
+            } else {
+                partName = [NSString stringWithFormat:@"x%d", i]; // PENDING -- make var names a parameter
+            }
+            [structS appendString:[structInfo objectForKey:TYPE_LABEL]];
+            [structS appendString:partName];
+            [structS appendString:[structInfo objectForKey:MODIFIER_LABEL]];
+            [structS appendString:@"; "];
         }
-        [structS appendString:[structInfo objectForKey:TYPE_LABEL]];
-        [structS appendString:partName];
-        [structS appendString:[structInfo objectForKey:MODIFIER_LABEL]];
-        [structS appendString:@"; "];
     }
     
     return structS;
@@ -645,10 +660,6 @@ NSString *rtb_functionSignatureNote(BOOL showFunctionSignatureNote) {
                 ++ivT;
             }
             
-            while (*ivT == 'A') { // no idea what 'A' means, happens on BRNotificationReceiver _suspendCount
-                ++ivT;
-            }
-            
             if (typeSpec == nil) { // most common case: types are NOT modified by a specifier
                 
                 type = [self typeForFilerCode:*ivT spaceAfter:spaceAfter];
@@ -698,12 +709,12 @@ NSString *rtb_functionSignatureNote(BOOL showFunctionSignatureNote) {
     if (isUnnamedType) {
         
         BOOL isBlock = *ivT == '?';
+        ivT += isBlock; // only increament ivT if the next character is actually being consumed
         if(isBlock && [[NSUserDefaults standardUserDefaults] boolForKey:@"RTBAddCommentsForBlocks"]) {
             typeS = (spaceAfter ? @"id /* block */ " : @"id /* block */");
         } else {
             typeS = (spaceAfter ? @"id " : @"id");
         }
-        ++ivT;
     }
     
     return [NSDictionary dictionaryWithObjectsAndKeys:typeS, TYPE_LABEL, modifierS, MODIFIER_LABEL, nil];

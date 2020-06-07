@@ -38,9 +38,9 @@ static const NSUInteger kPrivateFrameworks = 1;
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
     if(section == kPublicFrameworks) {
-        return [_publicFrameworks count];
+        return [_filteredPublicFrameworks count];
     } else if (section == kPrivateFrameworks) {
-        return [_privateFrameworks count];
+        return [_filteredPrivateFrameworks count];
     }
     return 0;
 }
@@ -52,9 +52,9 @@ static const NSUInteger kPrivateFrameworks = 1;
     NSBundle *b = nil;
     
     if(indexPath.section == kPublicFrameworks) {
-        b = [_publicFrameworks objectAtIndex:indexPath.row];
+        b = [_filteredPublicFrameworks objectAtIndex:indexPath.row];
     } else {
-        b = [_privateFrameworks objectAtIndex:indexPath.row];
+        b = [_filteredPrivateFrameworks objectAtIndex:indexPath.row];
     }
     
     NSString *name = [[[b bundlePath] lastPathComponent] stringByDeletingPathExtension];
@@ -68,9 +68,9 @@ static const NSUInteger kPrivateFrameworks = 1;
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
     NSBundle *b = nil;
     if(indexPath.section == kPublicFrameworks) {
-        b = [_publicFrameworks objectAtIndex:indexPath.row];
+        b = [_filteredPublicFrameworks objectAtIndex:indexPath.row];
     } else {
-        b = [_privateFrameworks objectAtIndex:indexPath.row];
+        b = [_filteredPrivateFrameworks objectAtIndex:indexPath.row];
     }
     
     NSString *bundlePath = [b bundlePath];
@@ -110,17 +110,38 @@ static const NSUInteger kPrivateFrameworks = 1;
     [self.navigationController pushViewController:listTVC animated:YES];
 }
 
+- (void)updateSearchResultsForSearchController:(UISearchController *)searchController {
+	NSString *filter = [searchController.searchBar.text lowercaseString];
+	if ([filter length] != 0) {
+        NSPredicate *predicate = [NSPredicate predicateWithBlock:^BOOL(id evaluatedObject, NSDictionary *bindings) {
+            return [[[[[evaluatedObject bundlePath] lastPathComponent] stringByDeletingPathExtension] lowercaseString] containsString:filter];
+        }];
+        self.filteredPublicFrameworks = [self.publicFrameworks filteredArrayUsingPredicate:predicate];
+        self.filteredPrivateFrameworks = [self.privateFrameworks filteredArrayUsingPredicate:predicate];
+    } else {
+        self.filteredPublicFrameworks = self.publicFrameworks;
+        self.filteredPrivateFrameworks = self.privateFrameworks;
+    }
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self.tableView reloadData];
+    });
+}
+
 - (IBAction)loadAllFrameworks:(id)sender {
-    _alertView = [[UIAlertView alloc] init];
-    _alertView.title = @"Loading All Frameworks";
-    _alertView.message = nil;
     
-    _progressView = [[UIProgressView alloc] initWithFrame:CGRectMake(20.0, 60.0, 245.0, 9.0)];
-    _progressView.progress = 0.0;
-    [_alertView addSubview:_progressView];
-    [_alertView show];
+    UIAlertController *alertController = [UIAlertController alertControllerWithTitle:@"Loading All Frameworks" message:nil preferredStyle:UIAlertControllerStyleAlert];
     
     __weak typeof(self) weakSelf = self;
+    
+    [self presentViewController:alertController animated:YES completion:^{
+        __strong typeof(weakSelf) strongSelf = weakSelf;
+        if(strongSelf == nil) return;
+        CGFloat margin = 8.0;
+        CGFloat progressHeight = 2;
+        strongSelf.progressView = [[UIProgressView alloc] initWithFrame:CGRectMake(margin, alertController.view.frame.size.height - progressHeight, alertController.view.frame.size.width - margin * 2.0 , progressHeight)];
+        strongSelf.progressView.progress = 0.0;
+        [alertController.view addSubview:strongSelf.progressView];
+    }];
     
     NSBlockOperation *op = [NSBlockOperation blockOperationWithBlock:^{
         
@@ -134,11 +155,36 @@ static const NSUInteger kPrivateFrameworks = 1;
         NSUInteger total = [allFrameworks count];
         
         for(NSBundle *b in allFrameworks) {
-            
+            NSString *bundlePath = [b bundlePath];
 #if TARGET_IPHONE_SIMULATOR
-            if([[b bundlePath] isEqualToString:@"/System/Library/PrivateFrameworks/Safari.framework"]) {
-                NSLog(@"-- skip /System/Library/PrivateFrameworks/Safari.framework, known to be a crasher on simulator");
+            if (NSFoundationVersionNumber < NSFoundationVersionNumber_iOS_8_0
+                && [bundlePath isEqualToString:@"/System/Library/PrivateFrameworks/Safari.framework"]) {
+                NSLog(@"-- skip %@, known to be a crasher on simulator", bundlePath);
                 continue;
+            
+            }
+            if (NSFoundationVersionNumber >= 1400
+                && [bundlePath isEqualToString:@"/System/Library/PrivateFrameworks/Spotlight.framework"]) {
+                NSLog(@"-- skip %@, known to be a crasher on simulator", bundlePath);
+                continue;
+            }
+#else
+            if (NSFoundationVersionNumber >= 1400) {
+                static NSSet *skipedFrameworks = nil;
+                if (!skipedFrameworks) {
+                    skipedFrameworks = [NSSet setWithObjects:
+                                        @"/System/Library/PrivateFrameworks/PowerlogLiteOperators.framework",
+                                        @"/System/Library/PrivateFrameworks/PowerlogCore.framework",
+                                        @"/System/Library/PrivateFrameworks/PowerlogHelperdOperators.framework",
+                                        @"/System/Library/PrivateFrameworks/PowerlogFullOperators.framework",
+                                        @"/System/Library/PrivateFrameworks/PowerlogAccounting.framework",
+                                        @"/System/Library/PrivateFrameworks/Accessibility.framework/Frameworks/AXSpringBoardServerInstance.framework", // It will stuck
+                                        nil];
+                }
+                if ([skipedFrameworks containsObject:bundlePath]) {
+                    NSLog(@"-- skip %@, known to be a crasher on device", bundlePath);
+                    continue;
+                }
             }
 #endif
             
@@ -175,7 +221,7 @@ static const NSUInteger kPrivateFrameworks = 1;
             __strong typeof(weakSelf) strongSelf = weakSelf;
             if(strongSelf == nil) return;
             
-            [strongSelf.alertView dismissWithClickedButtonIndex:0 animated:YES];
+            [strongSelf dismissViewControllerAnimated:YES completion:nil];
             
             [strongSelf.allClasses emptyCachesAndReadAllRuntimeClasses];
             
@@ -190,20 +236,29 @@ static const NSUInteger kPrivateFrameworks = 1;
 }
 
 - (NSArray *)frameworksAtPath:(NSString *)path {
-    NSFileManager *fm = [NSFileManager defaultManager];
-    NSError *error = nil;
-    NSArray *c = [fm contentsOfDirectoryAtPath:path error:&error];
-    if(c == nil) NSLog(@"-- %@", error);
+    NSFileManager *fileManager = [NSFileManager defaultManager];
     
-    NSMutableArray *ma = [NSMutableArray array];
-    for(NSString *s in c) {
-        if([[s pathExtension] isEqualToString:@"framework"]) {
-            NSBundle *b = [NSBundle bundleWithPath:[path stringByAppendingPathComponent:s]];
-            if(b) [ma addObject:b];
+    NSDirectoryEnumerator *directoryEnumerator = [fileManager enumeratorAtURL:[NSURL fileURLWithPath:path] includingPropertiesForKeys:@[] options:0 errorHandler:^BOOL(NSURL *url, NSError *error) {
+        NSLog(@"Error for framework at URL %@ -- %@", url, error);
+        return YES;
+    }];
+    
+    NSMutableArray<NSString *> *frameworks = [NSMutableArray array];
+    for( NSURL *fileURL in directoryEnumerator ) {
+        if ( [fileURL.absoluteString.pathExtension isEqualToString:@"framework"] ) {
+            [frameworks addObject:fileURL.relativePath];
         }
     }
     
-    return ma;
+    NSMutableArray *bundles = [NSMutableArray array];
+    for( NSString *frameworkPath in frameworks ) {
+        NSBundle *bundle = [NSBundle bundleWithPath:frameworkPath];
+        if( bundle ) {
+            [bundles addObject:bundle];
+        }
+    }
+    
+    return bundles;
 }
 
 - (NSArray *)loadedBundleFrameworks {
@@ -217,6 +272,18 @@ static const NSUInteger kPrivateFrameworks = 1;
     return a;
 }
 
+- (void)setPublicFrameworks:(NSArray *)publicFrameworks {
+	_publicFrameworks = publicFrameworks;
+	_filteredPublicFrameworks = publicFrameworks;
+	[self updateSearchResultsForSearchController:self.searchController];
+}
+
+- (void)setPrivateFrameworks:(NSArray *)privateFrameworks {
+	_privateFrameworks = privateFrameworks;
+	_filteredPrivateFrameworks = privateFrameworks;
+	[self updateSearchResultsForSearchController:self.searchController];
+}
+
 - (void)viewDidLoad {
     self.title = @"Frameworks";
     
@@ -226,6 +293,13 @@ static const NSUInteger kPrivateFrameworks = 1;
     
     self.privateFrameworks = [self frameworksAtPath:@"/System/Library/PrivateFrameworks"];
     self.publicFrameworks = [self frameworksAtPath:@"/System/Library/Frameworks"];
+	
+	self.searchController = [[UISearchController alloc] initWithSearchResultsController:nil];
+	self.definesPresentationContext = YES;
+	self.searchController.searchResultsUpdater = self;
+	self.searchController.dimsBackgroundDuringPresentation = NO;
+    self.searchController.hidesNavigationBarDuringPresentation = NO;
+	self.tableView.tableHeaderView = self.searchController.searchBar;
     
     [super viewDidLoad];
 }

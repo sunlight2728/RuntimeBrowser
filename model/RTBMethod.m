@@ -130,9 +130,19 @@
 - (NSArray *)argumentsTypesDecoded {
     
     if(_cachedArgumentsTypesDecoded == nil) {
-    
-        unsigned int numberOfArguments = method_getNumberOfArguments(_method);
+        /*
+        NSString *methodName = [NSString stringWithCString:method_getName(_method) encoding:NSUTF8StringEncoding];
+        NSLog(@"-- methodName: %@", methodName);
         
+        if([self.filePath isEqualToString:@"/System/Library/PrivateFrameworks/CoreKnowledge.framework/CoreKnowledge"]) {
+            NSArray *blacklistCoreKnowledgeSelectors = @[@"identifier", @"sql", @"writeBatch"];
+            if([blacklistCoreKnowledgeSelectors containsObject:methodName]) {
+                return _cachedArgumentsTypesDecoded;
+            }
+        }
+        */
+        unsigned int numberOfArguments = method_getNumberOfArguments(_method);
+            
         NSMutableArray *ma = [NSMutableArray array];
         
         for(unsigned int i = 0; i < numberOfArguments; i++) {
@@ -152,6 +162,7 @@
 
 - (NSString *)headerDescriptionWithNewlineAfterArgs:(BOOL)newlineAfterArgs {
     char* returnTypeCString = method_copyReturnType(_method);
+    if(returnTypeCString == NULL) return @"";
     NSString *returnTypeEncoded = [NSString stringWithCString:returnTypeCString encoding:NSASCIIStringEncoding];
     free(returnTypeCString);
     NSString *returnType = [RTBTypeDecoder decodeType:returnTypeEncoded flat:YES];

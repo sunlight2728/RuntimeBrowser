@@ -10,15 +10,18 @@
 
 @class RTBRuntime;
 
-@interface RTBFrameworksTVC : UITableViewController <UITableViewDataSource, UITableViewDelegate>
+@interface RTBFrameworksTVC : UITableViewController <UITableViewDataSource, UITableViewDelegate, UISearchResultsUpdating>
 
 @property (strong, nonatomic) NSArray *publicFrameworks;
 @property (strong, nonatomic) NSArray *privateFrameworks;
 @property (strong, nonatomic) NSArray *bundleFrameworks;
 @property (strong, nonatomic) RTBRuntime *allClasses;
 
-@property (strong, nonatomic) UIAlertView *alertView;
+@property (strong, nonatomic) NSArray *filteredPublicFrameworks;
+@property (strong, nonatomic) NSArray *filteredPrivateFrameworks;
+
 @property (strong, nonatomic) UIProgressView *progressView;
+@property (strong, nonatomic) UISearchController *searchController;
 
 - (IBAction)loadAllFrameworks:(id)sender;
 
